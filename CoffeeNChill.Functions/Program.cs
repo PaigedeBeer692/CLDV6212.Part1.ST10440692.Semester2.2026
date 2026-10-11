@@ -21,6 +21,9 @@ builder.Services.AddSingleton<AzureStorageService>();
 // This will then register the Azure Table Storage service for dependency injection.
 builder.Services.AddSingleton<MenuStorageService>();
 
+// This will then register the order storage service for dependency injection.
+builder.Services.AddSingleton<OrderStorageService>();
+
 // This will then build the application and then also start the Azure Functions host.
 builder.Build().Run();
 

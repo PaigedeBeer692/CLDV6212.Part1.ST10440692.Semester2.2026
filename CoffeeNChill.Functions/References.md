@@ -1,30 +1,48 @@
-Microsoft Learn – Azure Functions
-Microsoft. (2026) Azure Functions documentation. Available at: Microsoft Learn – Azure Functions (Accessed: 14 September 2026).
+# References
 
-Microsoft Learn – Azure Table Storage
-Microsoft. (2026) Azure Table Storage documentation. Available at: Microsoft Learn – Azure Table Storage (Accessed: 14 September 2026).
+Docker (2026) *Docker documentation*. Available at:
+https://docs.docker.com/ (Accessed: 11 October 2026).
 
-Microsoft Learn – Azure Blob Storage
-Microsoft. (2026) Azure Blob Storage documentation. Available at: Microsoft Learn – Azure Blob Storage (Accessed: 14 September 2026).
+Microsoft (2026a) *Azure Blob Storage documentation*. Microsoft Learn.
+Available at: https://learn.microsoft.com/en-us/azure/storage/blobs/
+(Accessed: 11 October 2026).
 
-Microsoft Learn – Azure Functions .NET isolated worker
-Microsoft. (2026) Guide for running C# Azure Functions in the isolated worker model. Available at: Microsoft Learn – .NET isolated worker model (Accessed: 14 September 2026).
+Microsoft (2026b) *Azure Functions documentation*. Microsoft Learn.
+Available at: https://learn.microsoft.com/en-us/azure/azure-functions/
+(Accessed: 11 October 2026).
 
-Microsoft Learn – Azurite
-Microsoft. (2026) Use the Azurite emulator for local Azure Storage development. Available at: Microsoft Learn – Azurite (Accessed: 14 September 2026).
+Microsoft (2026c) *Azure Functions .NET isolated worker model*.
+Microsoft Learn. Available at:
+https://learn.microsoft.com/en-us/azure/azure-functions/dotnet-isolated-process-guide
+(Accessed: 11 October 2026).
 
-Microsoft Learn – C#
-Microsoft. (2026) C# documentation. Available at: Microsoft Learn – C# (Accessed: 14 September 2026).
-Docker documentation
+Microsoft (2026d) *Azure Queue Storage documentation*. Microsoft Learn.
+Available at: https://learn.microsoft.com/en-us/azure/storage/queues/
+(Accessed: 11 October 2026).
 
-Docker. (2026) Docker documentation. Available at: Docker Documentation (Accessed: 14 September 2026).
+Microsoft (2026e) *Azure Table Storage documentation*. Microsoft Learn.
+Available at: https://learn.microsoft.com/en-us/azure/storage/tables/
+(Accessed: 11 October 2026).
 
-Postman documentation
-Postman. (2026) Postman documentation. Available at: Postman Documentation (Accessed: 14 September 2026).
+Microsoft (2026f) *Use the Azurite emulator for local Azure Storage
+development*. Microsoft Learn. Available at:
+https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite
+(Accessed: 11 October 2026).
 
+Microsoft (2026g) *C# documentation*. Microsoft Learn. Available at:
+https://learn.microsoft.com/en-us/dotnet/csharp/ (Accessed: 11 October
+2026).
 
-AI Disclosure:
+OpenAI (2026) *ChatGPT*. Available at: https://chatgpt.com/ (Accessed:
+11 October 2026).
 
-Artificial Intelligence such as ChatGPT by OpenAI, were used to assist with understanding programming concepts that were found difficult to apply, 
-debugging code when we struggled to find our own solutions, and improving code documentation where we felt needed improvement. 
-We revied all our code before submission. The final implementation and decisions remain our own work.
+Postman (2026) *Postman documentation*. Available at:
+https://learning.postman.com/docs/ (Accessed: 11 October 2026).
+
+## AI Disclosure
+
+Artificial intelligence, including ChatGPT by OpenAI, was used to assist
+with understanding programming concepts, troubleshooting errors, and
+improving code documentation. The code and documentation should be
+reviewed and understood by the student. The final implementation and
+decisions remain the student's responsibility.
