@@ -6,12 +6,12 @@ using CoffeeNChill.Functions.Models;
 
 namespace CoffeeNChill.Functions.Services
 {
-    // Handles saving and retrieving order information in Azure Table Storage.
+    // This will handle saving and retrieving order information in Azure Table Storage.
     public class OrderStorageService
     {
         private readonly TableClient _tableClient;
 
-        // Connects to the Orders table using the storage connection string.
+        // This will onnect to the Orders table using the storage connection string.
         public OrderStorageService()
         {
             string connectionString =
@@ -22,7 +22,7 @@ namespace CoffeeNChill.Functions.Services
             _tableClient = new TableClient(connectionString, "Orders");
         }
 
-        // Saves an order record in the Orders table.
+        // This will saves an order record in the Orders table.
         public async Task SaveOrderAsync(Order order, string status)
         {
             var orderEntity = new TableEntity(
@@ -36,10 +36,15 @@ namespace CoffeeNChill.Functions.Services
                 ["Status"] = status
             };
 
-            await _tableClient.CreateIfNotExistsAsync();
-            await _tableClient.UpsertEntityAsync(
-                orderEntity,
-                TableUpdateMode.Merge);
+            var result = await _tableClient.CreateIfNotExistsAsync();
+            Console.WriteLine($"Orders table creation result: {result?.Value?.Name ?? "Orders already exists"}");
+            Console.WriteLine("Orders table creation check completed.");
+            var response = await _tableClient.UpsertEntityAsync(
+            orderEntity,
+            TableUpdateMode.Merge);
+
+            Console.WriteLine($"Orders table write status: {response.Status}");
+            Console.WriteLine($"Saved order {order.OrderId} with status {status}.");
         }
     }
 }

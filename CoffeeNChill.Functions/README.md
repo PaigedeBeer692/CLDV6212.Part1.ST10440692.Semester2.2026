@@ -1,81 +1,88 @@
-# CoffeeNChill
+# CoffeeNChill Part 1
 
 ## Project Overview
 
-CoffeeNChill is a cloud-based application developed for the CLDV6212
-Cloud Development assignment. The application uses Azure Functions and
-Azure Storage to support menu management, staff document storage, and
-order processing.
+CoffeeNChill is a C# Azure Functions application developed for the Cloud Development 2B assignment. The application allows orders to be submitted through an HTTP endpoint and added to an Azure Storage Queue for processing.
 
-This repository contains the work for Part 1 and Part 2 of the
-assignment.
+The project uses Docker Compose to run the Azure Functions application together with Azurite, which provides local Azure Storage services for development and testing.
 
 ## Technologies Used
 
--   C# and .NET isolated Azure Functions
--   Azure Table Storage
--   Azure Blob Storage
--   Azure Queue Storage
--   Azurite for local Azure Storage emulation
--   Docker and Docker Compose
--   Postman for HTTP endpoint testing
--   GitHub for source control
+- C#
+- .NET isolated Azure Functions
+- Azure Queue Storage
+- Azure Table Storage
+- Azurite
+- Docker and Docker Compose
+- Postman
+- GitHub
 
-## Part 1: Menu and Document Management
+## Main Functionality
 
-Part 1 includes HTTP-triggered Azure Functions for managing menu items
-and staff documents.
+### Queueing Orders
 
-### Menu endpoints
+The `QueueOrder` function accepts an HTTP POST request at:
 
-  ---------------------------------------------------------------------------------
-  Method                  Endpoint                          Purpose
-  ----------------------- --------------------------------- -----------------------
-  GET                     `/api/menu`                       Retrieve menu items
+`http://localhost:8080/api/orders/queue`
 
-  POST                    `/api/menu`                       Create a menu item
+A valid order is added to the order-processing queue. The endpoint returns **202 Accepted** when the order is accepted for processing.
 
-  GET                     `/api/menu/category/{category}`   Retrieve menu items by
-                                                            category
+### Processing Orders
 
-  PUT                     `/api/menu/{category}/{sku}`      Update a menu item
+The `ProcessOrderQueue` function runs when a message is received from the `order-processing-queue`.
 
-  DELETE                  `/api/menu/{category}/{sku}`      Delete a menu item
-  ---------------------------------------------------------------------------------
+The function processes the order through the following statuses:
 
-Menu records are stored in Azure Table Storage in the `MenuItems` table.
+1. Received
+2. Preparing
+3. Ready
+4. Collected
 
-### Staff document endpoints
+The processing results are recorded in the application logs.
 
-  --------------------------------------------------------------------------------------
-  Method                  Endpoint                               Purpose
-  ----------------------- -------------------------------------- -----------------------
-  POST                    `/api/documents/upload`                Upload a staff document
+### Order Storage
 
-  GET                     `/api/documents`                       List staff documents
+The `OrderStorageService` class is responsible for saving order information to the `Orders` Azure Table Storage table. The stored information includes the order ID, customer name, selected item SKUs, total price, timestamp and status.
 
-  GET                     `/api/documents/download/{fileName}`   Download a staff
-                                                                 document by file name
-  --------------------------------------------------------------------------------------
+## Running the Application
 
-Staff documents are stored in Azure Blob Storage.
+The application is configured to run using Docker Compose with two services:
 
-## Part 2: Order Queue Processing
+- **Functions:** runs the CoffeeNChill Azure Functions application.
+- **Azurite:** provides local Blob, Queue and Table Storage services.
 
-Part 2 extends the application with an order-processing workflow using
-Azure Queue Storage and Azure Table Storage.
+To start the services, open a terminal in the directory containing `docker-compose.yml` and run:
 
-### Order submission
+```bash
+docker compose up -d
+```
 
--   **Method:** `POST`
--   **Endpoint:** `/api/orders/queue`
--   **Local URL:** `http://localhost:8080/api/orders/queue`
+To view the running containers:
 
-The request body is JSON. Example:
+```bash
+docker ps
+```
 
-``` json
+To view the Functions logs:
+
+```bash
+docker logs --tail 100 coffeenchill-functions
+```
+
+## Testing with Postman
+
+1. Open Postman.
+2. Create a new **POST** request.
+3. Enter the URL:
+
+   `http://localhost:8080/api/orders/queue`
+
+4. Select **Body → raw → JSON**.
+5. Enter a valid order, for example:
+
+```json
 {
-  "OrderId": "ORD-2026-8801",
+  "OrderId": "ORD-001",
   "CustomerName": "Jane Smith",
   "SelectedItemSKUs": ["COF-001", "PAS-104"],
   "TotalPrice": 65.00,
@@ -83,148 +90,27 @@ The request body is JSON. Example:
 }
 ```
 
-Use a unique `OrderId` for each test order and a current UTC timestamp
-when testing. The values above are sample data.
+6. Send the request.
+7. Check the response and the Functions logs to confirm that the order has been queued and processed.
 
-The HTTP function serializes the order and sends it to the
-`order-processing-queue` queue. The queue-triggered function
-`ProcessOrderQueue` reads the message and stores order information in
-the `Orders` table. The required order status lifecycle is:
+## Docker Image
 
-`Received` → `Preparing` → `Ready` → `Collected`
+The Functions application image used in the Docker Compose configuration is:
 
-Before submission, verify the complete queue workflow and confirm the
-status changes are visible in the `Orders` table.
+`paigedebeer692/coffeenchill-functions:v2.3`
 
-## Running Locally with Docker Compose
+## Version Control
 
-Docker Compose is configured in the root-level `docker-compose.yml` file
-to start Azurite and the CoffeeNChill Functions container.
+GitHub is used for version control and to track project development through commits. The repository also contains the project files and configuration.
 
-### Prerequisites
+## Limitations and Verification
 
--   Docker Desktop installed and running
--   Access to the published Docker Hub images used in
-    `docker-compose.yml`
-
-### Start the application
-
-Open PowerShell in the repository root (the folder containing
-`CoffeeNChill.Part1.slnx` and `docker-compose.yml`) and run:
-
-``` powershell
-docker compose -f .\docker-compose.yml up -d
-```
-
-Check running containers:
-
-``` powershell
-docker ps
-```
-
-View the Functions logs:
-
-``` powershell
-docker logs --tail 100 coffeenchill-functions
-```
-
-View the Azurite logs:
-
-``` powershell
-docker logs --tail 100 coffeenchill-azurite
-```
-
-Stop the Compose application:
-
-``` powershell
-docker compose -f .\docker-compose.yml down
-```
-
-The Compose file should reference the published, version-tagged Docker
-Hub Functions image required for Part 2. Confirm the image names and
-tags in `docker-compose.yml` before submitting.
-
-## Testing with Postman
-
-The Postman collection is located at:
-
-`CoffeeNChill.Functions/Docs/CoffeeNChill.postman_collection.json`
-
-Import the collection into Postman and configure the local base URL as:
-
-`http://localhost:8080`
-
-Test the Part 1 menu and document endpoints and the Part 2 order
-endpoint. For the order endpoint, send a `POST` request to
-`/api/orders/queue` with a JSON body like the example above.
-
-For the final demonstration and submission, verify and capture evidence
-of: 1. Docker Compose starting both services. 2. A successful order
-submission response. 3. The order message being processed by the
-queue-triggered function. 4. The order record appearing in the `Orders`
-table with the expected status transitions. 5. The Part 1 endpoints
-continuing to work.
-
-## Repository Structure
-
-``` text
-CoffeeNChill.Part1/
-├── CoffeeNChill.Part1.slnx
-├── docker-compose.yml
-└── CoffeeNChill.Functions/
-    ├── Docs/
-    │   └── CoffeeNChill.postman_collection.json
-    ├── Functions/
-    │   ├── FileStorageFunction.cs
-    │   ├── MenuFunction.cs
-    │   ├── OrderQueueFunction.cs
-    │   └── ProcessOrderQueue.cs
-    ├── Models/
-    │   ├── MenuItem.cs
-    │   └── Order.cs
-    ├── Services/
-    │   ├── AzureStorageService.cs
-    │   ├── MenuStorageService.cs
-    │   └── OrderStorageService.cs
-    ├── CoffeeNChill.Functions.csproj
-    └── README.md
-```
-
-## Changelog
-
-### Part 2
-
--   Added an `Order` model for submitted order details.
--   Added `OrderStorageService` to save order records to Azure Table
-    Storage.
--   Added the `POST /api/orders/queue` HTTP endpoint to submit orders to
-    Azure Queue Storage.
--   Added the `ProcessOrderQueue` queue-triggered function for order
-    processing.
--   Added a root-level Docker Compose configuration for the Functions
-    application and Azurite.
-
-### Part 1
-
--   Added HTTP endpoints for menu item creation, retrieval, updating,
-    and deletion.
--   Added category-based menu item retrieval.
--   Added staff document upload, listing, and download endpoints.
--   Added Docker support and a Postman collection for endpoint testing.
-
-## Demonstration Video
-
-YouTube demonstration: **\[Add the published YouTube video link here
-before submission\]**
-
-The demonstration should show the application starting with one Docker
-Compose command, successful Postman requests, queue-triggered
-processing, and order records/status changes in Azure Table Storage.
+The order endpoint has returned `202 Accepted`, and the Functions logs have shown successful processing through all four order statuses. The contents of the `Orders` table should also be checked in Azure Storage Explorer to confirm that the records are visible.
 
 ## Use of AI
 
-ChatGPT was used as an assistance tool for explaining programming
-concepts, troubleshooting errors, and improving documentation. The
+ChatGPT was conducted for assistance for explaining programming
+concepts, troubleshooting errors, and improving my overall documentation where needed. The
 project code and changes should be reviewed and understood by the
-student, who remains responsible for the final implementation and
-submission.
+student which is me, will remain responsible for the final implementation and
+submission of part 1 and 2 together.

@@ -10,7 +10,7 @@ using CoffeeNChill.Functions.Models;
 
 namespace CoffeeNChill.Functions.Functions
 {
-    // Accepts customer orders and places them on the Azure Storage Queue.
+    // This will accept customer orders and places them on the Azure Storage Queue.
     public class OrderQueueFunction
     {
         private readonly ILogger<OrderQueueFunction> _logger;
@@ -20,7 +20,7 @@ namespace CoffeeNChill.Functions.Functions
             _logger = logger;
         }
 
-        // Receives an order through POST /api/orders/queue.
+        // This will receive an order through POST /api/orders/queue.
         [Function("QueueOrder")]
         public async Task<HttpResponseData> QueueOrder(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post",
@@ -28,7 +28,7 @@ namespace CoffeeNChill.Functions.Functions
         {
             try
             {
-                // Read the JSON request body and convert it into an Order object.
+                // This will read the JSON request body and convert it into an Order object.
                 string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
 
                 Order? order = JsonSerializer.Deserialize<Order>(
@@ -38,7 +38,7 @@ namespace CoffeeNChill.Functions.Functions
                         PropertyNameCaseInsensitive = true
                     });
 
-                // Check that the required order details have been provided.
+                // This will check that the required order details have been provided.
                 if (order == null ||
                     string.IsNullOrWhiteSpace(order.OrderId) ||
                     string.IsNullOrWhiteSpace(order.CustomerName) ||
@@ -55,13 +55,13 @@ namespace CoffeeNChill.Functions.Functions
                     return badRequest;
                 }
 
-                // Use UTC time when the request does not provide an order timestamp.
+                // This will use UTC time when the request does not provide an order timestamp.
                 if (order.OrderTimestamp == default)
                 {
                     order.OrderTimestamp = DateTime.UtcNow;
                 }
 
-                // Connect to the queue using the configured storage connection string.
+                // This will connect to the queue using the configured storage connection string.
                 string connectionString =
                     Environment.GetEnvironmentVariable("AzureWebJobsStorage")
                     ?? throw new InvalidOperationException(
@@ -71,10 +71,10 @@ namespace CoffeeNChill.Functions.Functions
                     connectionString,
                     "order-processing-queue");
 
-                // Create the queue if necessary before adding the order message.
+                // This will create the queue if necessary before adding the order message.
                 await queueClient.CreateIfNotExistsAsync();
 
-                // Convert the order into JSON before placing it on the queue.
+                // This will convert the order into JSON before placing it on the queue.
                 string orderJson = JsonSerializer.Serialize(order);
                 await queueClient.SendMessageAsync(orderJson);
 

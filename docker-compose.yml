@@ -2,7 +2,7 @@
 services:
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
-    command: "azurite --skipApiVersionCheck"
+    command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck"]
     container_name: coffeenchill-azurite
     
     ports:
@@ -15,7 +15,7 @@ services:
       - coffeenchill-network
 
   functions:
-    image: paigedebeer692/coffeenchill-functions:v2.0
+    image: paigedebeer692/coffeenchill-functions:v2.3
     container_name: coffeenchill-functions
     ports:
       - "8080:80"
