@@ -1,4 +1,4 @@
-# CoffeeNChill Part 1
+# CoffeeNChill 2
 
 ## Project Overview
 
