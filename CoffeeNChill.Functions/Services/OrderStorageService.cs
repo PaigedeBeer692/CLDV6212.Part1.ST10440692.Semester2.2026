@@ -22,7 +22,7 @@ namespace CoffeeNChill.Functions.Services
             _tableClient = new TableClient(connectionString, "Orders");
         }
 
-        // This will saves an order record in the Orders table.
+        // This will save an order record in the Orders table.
         public async Task SaveOrderAsync(Order order, string status)
         {
             var orderEntity = new TableEntity(

@@ -6,6 +6,10 @@ CoffeeNChill is a C# Azure Functions application developed for the Cloud Develop
 
 The project uses Docker Compose to run the Azure Functions application together with Azurite, which provides local Azure Storage services for development and testing.
 
+## YouTube Video
+
+link: https://youtu.be/oE0hYMHr6HM
+
 ## Technologies Used
 
 - C#
@@ -98,10 +102,6 @@ docker logs --tail 100 coffeenchill-functions
 The Functions application image used in the Docker Compose configuration is:
 
 `paigedebeer692/coffeenchill-functions:v2.3`
-
-## Version Control
-
-GitHub is used for version control and to track project development through commits. The repository also contains the project files and configuration.
 
 ## Limitations and Verification
 
