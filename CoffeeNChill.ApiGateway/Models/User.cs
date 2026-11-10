@@ -3,7 +3,7 @@ using Azure.Data.Tables;
 
 namespace CoffeeNChill.ApiGateway.Models
 {
-    // This class stores the information for each CoffeeNChill user.
+    // This class will store the information for each CoffeeNChill user.
     public class User : ITableEntity
     {
         // Users are stored in the CoffeeNChillUsers table.

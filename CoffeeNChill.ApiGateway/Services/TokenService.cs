@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace CoffeeNChill.ApiGateway.Services
 {
-    // This service creates JWT tokens for authenticated users.
+    // This service will create JWT tokens for authenticated users.
     public class TokenService
     {
         private readonly IConfiguration _configuration;
@@ -16,10 +16,10 @@ namespace CoffeeNChill.ApiGateway.Services
             _configuration = configuration;
         }
 
-        // Generate a JWT token after a successful login.
+        // This will generate a JWT token after a successful login.
         public string GenerateToken(User user)
         {
-            // Read the JWT settings from the application configuration.
+            //This will read the JWT settings from the application configuration.
             string secretKey =
                 _configuration["Jwt:Key"]
                 ?? throw new InvalidOperationException(
@@ -35,16 +35,16 @@ namespace CoffeeNChill.ApiGateway.Services
                 ?? throw new InvalidOperationException(
                     "JWT audience is missing.");
 
-            // Convert the secret key into a security key.
+            // This will convert the secret key into a security key.
             var securityKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(secretKey));
 
-            // Create the signing credentials.
+            // This will create the signing credentials.
             var credentials = new SigningCredentials(
                 securityKey,
                 SecurityAlgorithms.HmacSha256);
 
-            // Add the user's information to the token.
+            // This will dd the user's information to the token.
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Email),
@@ -55,7 +55,7 @@ namespace CoffeeNChill.ApiGateway.Services
                     Guid.NewGuid().ToString())
             };
 
-            // Create the token with a one-hour expiry time.
+            // This will create the token with a one-hour expiry time.
             var token = new JwtSecurityToken(
                 issuer: issuer,
                 audience: audience,
@@ -63,7 +63,7 @@ namespace CoffeeNChill.ApiGateway.Services
                 expires: DateTime.UtcNow.AddHours(1),
                 signingCredentials: credentials);
 
-            // Convert the token into a string.
+            // This will convert the token into a string.
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }

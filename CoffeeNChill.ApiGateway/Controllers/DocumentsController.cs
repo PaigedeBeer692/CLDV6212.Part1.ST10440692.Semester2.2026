@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace CoffeeNChill.ApiGateway.Controllers
 {
-    // This controller handles document requests through the API Gateway.
+    // This controller will handle document requests through the API Gateway.
     [ApiController]
     [Route("api/[controller]")]
     [Authorize(Roles = "Staff,Admin")]
@@ -11,14 +11,14 @@ namespace CoffeeNChill.ApiGateway.Controllers
     {
         private readonly HttpClient _httpClient;
 
-        // Connects the Gateway to the Azure Functions application.
+        // This will connect the Gateway to the Azure Functions application.
         public DocumentsController(IHttpClientFactory httpClientFactory)
         {
             _httpClient = httpClientFactory.CreateClient();
         }
 
         // POST: api/Documents/upload
-        // Uploads a document to Azure Blob Storage.
+        // This will uploads a document to Azure Blob Storage.
         [HttpPost("upload")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UploadDocument(IFormFile file)
@@ -54,7 +54,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
         }
 
         // GET: api/Documents
-        // Retrieves a list of stored documents.
+        // This will retrieve a list of stored documents.
         [HttpGet]
         public async Task<IActionResult> ListDocuments()
         {
@@ -73,7 +73,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
         }
 
         // GET: api/Documents/download/example.pdf
-        // Downloads a document from Azure Blob Storage.
+        // This will download a document from Azure Blob Storage.
         [HttpGet("download/{fileName}")]
         public async Task<IActionResult> DownloadDocument(string fileName)
         {

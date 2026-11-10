@@ -23,7 +23,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
             _passwordHasher = passwordHasher;
         }
 
-        // Register a new customer account
+        // This will register a new customer account
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDto request)
         {
@@ -71,7 +71,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
             });
         }
 
-        // Log in an existing customer
+        // This will login an existing customer
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto request)
         {

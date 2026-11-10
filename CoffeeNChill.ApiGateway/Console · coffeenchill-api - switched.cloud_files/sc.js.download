@@ -1,0 +1,696 @@
+/*
+ * switched.cloud panel: what Livewire did for the Filament pages, without Livewire.
+ *
+ * Loaded on every page before Livewire's bundle (which then only starts Alpine, so Filament's own
+ * Alpine components keep working: filamentModal, filamentDropdown, notificationComponent,
+ * x-tooltip, the sidebar store). Data attributes:
+ *
+ *   data-sc-poll="<ms>"          on an element with an id: re-fetch the page every <ms> while the tab
+ *                                is visible and swap the element for the fresh one (wire:poll).
+ *   data-sc-copy="<text>"        on a button: copy the text, then Filament's "Copied!" tooltip
+ *                                (data-sc-copy-message overrides the message).
+ *   data-sc-confirm="<text>"     on a form or a submit button: ask first.
+ *   data-sc-autosubmit           on an input or select: submit its form when it changes.
+ *   ?modal=<id> / data-open-modal on this script tag: open that Filament modal on load.
+ *
+ * Every POST form gets its _token if it lacks one, and its submit buttons are disabled while it
+ * posts (wire:loading). The database notifications slide-over loads its list from
+ * GET /notifications/list and sends its writes to /notifications/... (see docs/port/README.md).
+ * Toasts sent from JS (new FilamentNotification().title(...).send()) are shown like the server's.
+ */
+(() => {
+    'use strict';
+
+    if (window.sc) {
+        return;
+    }
+
+    const script = document.currentScript;
+    const base = (() => {
+        const src = script ? script.getAttribute('src') : '';
+        const at = src ? src.indexOf('/sc/sc.js') : -1;
+        return at > 0 ? src.slice(0, at) : '';
+    })();
+    const csrf = () => (script && script.dataset.csrf)
+        || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        || '';
+
+    // Not X-Requested-With: the server would answer errors as JSON (expectsJson).
+    const headers = (extra = {}) => ({
+        'X-SC-Poll': '1',
+        Accept: 'text/html, application/xhtml+xml',
+        ...extra,
+    });
+
+    const parse = (html) => new DOMParser().parseFromString(html, 'text/html');
+
+    // sc.js runs before Livewire's bundle starts Alpine, so this always hears alpine:initialized.
+    let alpineReady = false;
+    document.addEventListener('alpine:initialized', () => {
+        alpineReady = true;
+    }, { once: true });
+    const whenAlpine = (callback) => {
+        if (alpineReady) {
+            callback();
+            return;
+        }
+        document.addEventListener('alpine:initialized', () => callback(), { once: true });
+    };
+
+    const openModal = (id) => window.dispatchEvent(new CustomEvent('open-modal', { detail: { id } }));
+    const closeModal = (id) => window.dispatchEvent(new CustomEvent('close-modal', { detail: { id } }));
+
+    // ---------------------------------------------------------------- polling (wire:poll)
+
+    let pageFetch = null;
+
+    // One request serves every element due within the same second.
+    const fetchPage = () => {
+        if (pageFetch && Date.now() - pageFetch.at < 1000) {
+            return pageFetch.promise;
+        }
+        // redirect: 'manual': signed out (sent to sign in) or sent elsewhere leaves the page as it is.
+        const promise = fetch(window.location.href, { headers: headers(), credentials: 'same-origin', redirect: 'manual' })
+            .then((response) => {
+                if (!response.ok) {
+                    return null;
+                }
+                return response.text().then(parse);
+            })
+            .catch(() => null);
+        pageFetch = { at: Date.now(), promise };
+        return promise;
+    };
+
+    const busy = (el) => {
+        const active = document.activeElement;
+        if (active && el.contains(active) && active.matches('input, textarea, select, [contenteditable]')) {
+            return true;
+        }
+        // An open dropdown or modal inside would be closed by the swap.
+        return el.querySelector('.fi-dropdown-panel:not([style*="display: none"])[x-ref="panel"]:not([x-cloak])') !== null
+            || el.querySelector('.fi-modal.fi-modal-open') !== null
+            || el.hasAttribute('data-sc-poll-paused');
+    };
+
+    const timers = new WeakMap();
+    const swappedAt = new WeakMap();
+
+    const interval = (el) => Number.parseInt(el.dataset.scPoll, 10);
+
+    const swap = (el, fresh) => {
+        const timer = timers.get(el);
+        if (timer !== undefined) {
+            window.clearTimeout(timer);
+            timers.delete(el);
+        }
+        const node = document.importNode(fresh, true);
+        el.replaceWith(node);
+        swappedAt.set(node, Date.now());
+        scan(node);
+        document.dispatchEvent(new CustomEvent('sc:polled', { detail: { id: node.id, el: node } }));
+    };
+
+    // A fetched page also refreshes the other polled elements that are at least half way to their
+    // own next poll, so a page polling every 15 s does not fetch again for its 60 s ones.
+    const swapOthers = (doc, except) => {
+        document.querySelectorAll('[data-sc-poll][id]').forEach((other) => {
+            if (other === except || busy(other)) {
+                return;
+            }
+            const since = Date.now() - (swappedAt.get(other) ?? 0);
+            const fresh = doc.getElementById(other.id);
+            if (fresh && since >= interval(other) / 2) {
+                swap(other, fresh);
+            }
+        });
+    };
+
+    const schedule = (el, first = null) => {
+        const ms = interval(el);
+        if (!el.id || !Number.isFinite(ms) || ms < 1000 || timers.has(el)) {
+            return;
+        }
+        if (!swappedAt.has(el)) {
+            swappedAt.set(el, Date.now());
+        }
+        const tick = async () => {
+            timers.delete(el);
+            if (!el.isConnected) {
+                return;
+            }
+            if (document.visibilityState !== 'visible' || busy(el)) {
+                timers.set(el, window.setTimeout(tick, ms));
+                return;
+            }
+            const doc = await fetchPage();
+            if (!el.isConnected) {
+                return;
+            }
+            const fresh = doc ? doc.getElementById(el.id) : null;
+            if (fresh && !busy(el)) {
+                swap(el, fresh);
+                swapOthers(doc, null);
+                return;
+            }
+            timers.set(el, window.setTimeout(tick, ms));
+        };
+        timers.set(el, window.setTimeout(tick, first ?? ms));
+    };
+
+    // The page came back into view: whatever is overdue refreshes now, not a full interval later.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') {
+            return;
+        }
+        document.querySelectorAll('[data-sc-poll][id]').forEach((el) => {
+            const timer = timers.get(el);
+            if (timer !== undefined && Date.now() - (swappedAt.get(el) ?? 0) >= interval(el)) {
+                window.clearTimeout(timer);
+                timers.delete(el);
+                schedule(el, 0);
+            }
+        });
+    });
+
+    const scan = (root) => {
+        if (root.nodeType !== 1) {
+            return;
+        }
+        if (root.matches('[data-sc-poll][id]')) {
+            schedule(root);
+        }
+        root.querySelectorAll('[data-sc-poll][id]').forEach((el) => schedule(el));
+    };
+
+    // ---------------------------------------------------------------- forms
+
+    const ensureToken = (form) => {
+        if ((form.getAttribute('method') || '').toLowerCase() !== 'post') {
+            return;
+        }
+        if (form.querySelector('input[name="_token"]')) {
+            return;
+        }
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = '_token';
+        input.value = csrf();
+        input.autocomplete = 'off';
+        form.prepend(input);
+    };
+
+    const submitButtons = (form) => {
+        const inside = Array.from(form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]'));
+        const outside = form.id ? Array.from(document.querySelectorAll(`[form="${CSS.escape(form.id)}"][type="submit"]`)) : [];
+        return inside.concat(outside);
+    };
+
+    const setBusy = (form, on) => {
+        form.toggleAttribute('data-sc-busy', on);
+        submitButtons(form).forEach((button) => {
+            if (on) {
+                button.dataset.scWasDisabled = button.disabled ? '1' : '';
+                button.disabled = true;
+                button.setAttribute('aria-disabled', 'true');
+                button.classList.add('fi-disabled', 'fi-processing');
+            } else if (button.dataset.scWasDisabled !== undefined) {
+                button.disabled = button.dataset.scWasDisabled === '1';
+                if (!button.disabled) {
+                    button.removeAttribute('aria-disabled');
+                    button.classList.remove('fi-disabled');
+                }
+                button.classList.remove('fi-processing');
+                delete button.dataset.scWasDisabled;
+            }
+        });
+    };
+
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+        if (form.hasAttribute('data-sc-busy')) {
+            event.preventDefault();
+            return;
+        }
+        const submitter = event.submitter;
+        const question = (submitter && submitter.dataset.scConfirm) || form.dataset.scConfirm;
+        if (question && !window.confirm(question)) {
+            event.preventDefault();
+            return;
+        }
+        ensureToken(form);
+        // Let other handlers decide first (a page may preventDefault and post with fetch).
+        window.setTimeout(() => {
+            if (event.defaultPrevented || (form.getAttribute('method') || 'get').toLowerCase() !== 'post' || form.target === '_blank') {
+                return;
+            }
+            setBusy(form, true);
+            // An answer that is not a new page (a download, a 204) leaves this one in place: the
+            // buttons work again after a while, as when Livewire's request ends.
+            window.setTimeout(() => {
+                if (form.isConnected) {
+                    setBusy(form, false);
+                }
+            }, 30000);
+        }, 0);
+    });
+
+    // Back from the next page (bfcache): the buttons work again.
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+            document.querySelectorAll('form[data-sc-busy]').forEach((form) => setBusy(form, false));
+        }
+    });
+
+    document.addEventListener('change', (event) => {
+        const el = event.target;
+        if (el instanceof Element && el.hasAttribute('data-sc-autosubmit') && el.form) {
+            if (typeof el.form.requestSubmit === 'function') {
+                el.form.requestSubmit();
+            } else {
+                el.form.submit();
+            }
+        }
+    });
+
+    // ---------------------------------------------------------------- copy
+
+    const copyText = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (error) {
+            // http:// (dev) has no clipboard API: the old way.
+            const area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', '');
+            area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+            document.body.appendChild(area);
+            area.select();
+            let ok = false;
+            try {
+                ok = document.execCommand('copy');
+            } catch (e) {
+                ok = false;
+            }
+            area.remove();
+            return ok;
+        }
+    };
+
+    const tooltip = (el, message) => {
+        if (window.Alpine && typeof window.Alpine.evaluate === 'function') {
+            try {
+                window.Alpine.evaluate(el, '$tooltip(message, { theme: $store.theme, timeout: 2000 })', { scope: { message } });
+                return;
+            } catch (error) {
+                // No tooltip plugin here: a toast instead.
+            }
+        }
+        toast({ title: message, status: 'success', duration: 2000 });
+    };
+
+    document.addEventListener('click', (event) => {
+        const button = event.target instanceof Element ? event.target.closest('[data-sc-copy]') : null;
+        if (!button) {
+            return;
+        }
+        event.preventDefault();
+        copyText(button.dataset.scCopy).then((ok) => {
+            if (ok) {
+                tooltip(button, button.dataset.scCopyMessage || 'Copied!');
+            }
+        });
+    });
+
+    // ---------------------------------------------------------------- toasts from JS
+
+    const ICONS = {
+        success: '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
+        danger: '<path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
+        warning: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/>',
+        info: '<path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"/>',
+    };
+    const CLOSE_ICON = '<svg class="fi-icon fi-size-md" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>';
+
+    const escapeHtml = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    })[c]);
+
+    // The markup of components/notification.html (Filament's toast) for a notification array.
+    const toast = (n) => {
+        const host = document.querySelector('[data-sc-toasts]');
+        if (!host) {
+            return;
+        }
+        const id = n.id || Math.random().toString(16).slice(2);
+        const status = ICONS[n.status] ? n.status : null;
+        const duration = n.duration ?? 6000;
+        const el = document.createElement('div');
+        el.setAttribute('x-data', `notificationComponent({ notification: ${JSON.stringify({ id, duration })} })`);
+        el.setAttribute('x-transition:enter-start', 'fi-transition-enter-start');
+        el.setAttribute('x-transition:enter-end', 'fi-transition-enter-end');
+        el.setAttribute('x-transition:leave-start', 'fi-transition-leave-start');
+        el.setAttribute('x-transition:leave-end', 'fi-transition-leave-end');
+        el.setAttribute('x-on:mouseenter', "pauseDuration('hover')");
+        el.setAttribute('x-on:mouseleave', "resumeDuration('hover')");
+        el.setAttribute('x-on:focusin', 'handleFocusIn($event)');
+        el.setAttribute('x-on:focusout', 'handleFocusOut($event)');
+        el.setAttribute('x-on:keydown.escape', 'handleEscape($event)');
+        el.setAttribute('x-on:close-notification.window', `if ($event.detail.id == '${String(id).replace(/[^A-Za-z0-9-]/g, '')}') close()`);
+        if (status === 'danger') {
+            el.setAttribute('role', 'alert');
+        }
+        el.className = 'fi-no-notification' + (status ? ` fi-status-${status}` : '');
+        el.dataset.scToast = String(id);
+        const icon = status
+            ? `<svg class="fi-color fi-color-${status} fi-no-notification-icon fi-icon fi-size-md" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">${ICONS[status]}</svg>`
+            : '';
+        const actions = (n.actions || []).filter((a) => a && a.url).map((a) => `<a href="${escapeHtml(a.url)}"${a.shouldOpenUrlInNewTab ? ' target="_blank"' : ''} class="fi-ac-link-action fi-link fi-size-sm fi-color fi-color-primary fi-text-color-600 dark:fi-text-color-300"><span class="fi-link-label">${escapeHtml(a.label)}</span></a>`).join('');
+        el.innerHTML = `${icon}<div class="fi-no-notification-main">`
+            + ((n.title || n.body) ? '<div class="fi-no-notification-text">'
+                + (n.title ? `<h3 class="fi-no-notification-title">${escapeHtml(n.title)}</h3>` : '')
+                + (n.body ? `<div class="fi-no-notification-body">${escapeHtml(n.body)}</div>` : '')
+                + '</div>' : '')
+            + (actions ? `<div class="fi-ac fi-no-notification-actions">${actions}</div>` : '')
+            + `</div><button type="button" x-on:click="dismiss()" aria-label="Close notification" title="Close notification" class="fi-icon-btn fi-no-notification-close-btn">${CLOSE_ICON}</button>`;
+        host.appendChild(el);
+    };
+
+    window.addEventListener('notificationSent', (event) => {
+        const n = event.detail && event.detail.notification;
+        if (n) {
+            toast(n);
+        }
+    });
+
+    // A closed toast leaves the page (Livewire's Notifications component removed it): Filament
+    // sends notificationClosed once the toast has faded out.
+    window.addEventListener('notificationClosed', (event) => {
+        const id = event.detail && event.detail.id;
+        if (id === undefined || id === null) {
+            return;
+        }
+        document.querySelectorAll(`[data-sc-toast="${CSS.escape(String(id))}"]`).forEach((el) => el.remove());
+        notificationWrite(id, 'remove');
+    });
+
+    // ---------------------------------------------------------------- database notifications
+
+    const LIST_URL = `${base}/notifications/list`;
+    const MODAL_ID = 'database-notifications';
+    let listUrl = LIST_URL;
+    let listLoading = null;
+    let listTimer = null;
+
+    const unreadLabel = (n) => (n ? `Notifications, ${n} unread notification${n === 1 ? '' : 's'}` : 'Notifications');
+
+    const setUnread = (count) => {
+        const button = document.querySelector('.phv2-notifications');
+        if (button) {
+            button.title = unreadLabel(count);
+            button.setAttribute('aria-label', unreadLabel(count));
+            let badge = button.querySelector('.phv2-notifications-badge');
+            if (count > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'phv2-notifications-badge';
+                    button.appendChild(badge);
+                }
+                badge.textContent = count > 99 ? '99+' : String(count);
+            } else if (badge) {
+                badge.remove();
+            }
+        }
+        const trigger = document.querySelector('.fi-sidebar-database-notifications-btn');
+        if (trigger) {
+            const ctn = trigger.querySelector('.fi-sidebar-database-notifications-btn-badge-ctn');
+            if (count > 0) {
+                if (ctn) {
+                    ctn.querySelector('.fi-badge-label').textContent = String(count);
+                } else {
+                    trigger.insertAdjacentHTML('beforeend', `<span class="fi-sidebar-database-notifications-btn-badge-ctn"><span class="fi-color fi-color-primary fi-text-color-600 dark:fi-text-color-200 fi-badge fi-size-md"><span class="fi-badge-label-ctn"><span class="fi-badge-label" data-sc-unread-count>${count}</span></span></span></span>`);
+                }
+            } else if (ctn) {
+                ctn.remove();
+            }
+        }
+    };
+
+    // Swap the shown slide-over's classes and window for the fresh one's, keeping Alpine's state.
+    const applyList = (doc) => {
+        const fresh = doc.getElementById(MODAL_ID);
+        const current = document.getElementById(MODAL_ID);
+        if (!fresh || !current) {
+            return;
+        }
+        const open = current.classList.contains('fi-modal-open');
+        current.className = fresh.className;
+        current.classList.toggle('fi-modal-open', open);
+        ['aria-describedby'].forEach((name) => {
+            if (fresh.hasAttribute(name)) {
+                current.setAttribute(name, fresh.getAttribute(name));
+            } else {
+                current.removeAttribute(name);
+            }
+        });
+        current.removeAttribute('data-sc-loading');
+        const freshWindow = fresh.querySelector('.fi-modal-window');
+        const currentWindow = current.querySelector('.fi-modal-window');
+        if (freshWindow && currentWindow) {
+            currentWindow.className = freshWindow.className;
+            currentWindow.replaceChildren(...Array.from(freshWindow.childNodes).map((node) => document.importNode(node, true)));
+        }
+        const unread = Number.parseInt(fresh.dataset.unread || '0', 10) || 0;
+        current.dataset.unread = String(unread);
+        setUnread(unread);
+    };
+
+    // A load asked for while one is under way (e.g. right after a write) runs again after it, so
+    // the list never stays older than the last change.
+    let listAgain = false;
+    const loadList = (url = listUrl) => {
+        listUrl = url;
+        if (listLoading) {
+            listAgain = true;
+            return listLoading;
+        }
+        listLoading = fetch(url, { headers: headers(), credentials: 'same-origin', redirect: 'manual' })
+            .then((response) => (response.ok ? response.text() : null))
+            .then((html) => {
+                if (html) {
+                    applyList(parse(html));
+                }
+            })
+            .catch(() => {})
+            .finally(() => {
+                listLoading = null;
+                if (listAgain) {
+                    listAgain = false;
+                    loadList(listUrl);
+                }
+            });
+        return listLoading;
+    };
+
+    const isListOpen = () => document.getElementById(MODAL_ID)?.classList.contains('fi-modal-open') ?? false;
+
+    // wire:poll.30s on the slide-over: every 30 s while it is open and the tab visible.
+    const pollList = () => {
+        window.clearTimeout(listTimer);
+        listTimer = window.setTimeout(() => {
+            if (isListOpen() && document.visibilityState === 'visible') {
+                loadList().finally(pollList);
+            } else if (isListOpen()) {
+                pollList();
+            }
+        }, 30000);
+    };
+
+    // keepalive: a "mark as read" on a link still reaches the server while the browser leaves.
+    const post = (url) => fetch(url, {
+        method: 'POST',
+        keepalive: true,
+        headers: headers({ 'X-CSRF-TOKEN': csrf(), 'Content-Type': 'application/x-www-form-urlencoded' }),
+        credentials: 'same-origin',
+        redirect: 'manual',
+        body: new URLSearchParams({ _token: csrf() }),
+    }).catch(() => null);
+
+    // Filament's DatabaseNotifications listeners: a closed notification is deleted, an action
+    // marked "mark as read" marks it read; only for the slide-over's own notifications.
+    const notificationWrite = (id, what) => {
+        const modal = document.getElementById(MODAL_ID);
+        const el = modal ? modal.querySelector(`[data-sc-notification="${CSS.escape(String(id))}"]`) : null;
+        if (!el || !/^[0-9a-f-]{36}$/i.test(String(id))) {
+            return;
+        }
+        if (what === 'remove') {
+            el.closest('[role="listitem"]')?.remove();
+        }
+        post(`${base}/notifications/${encodeURIComponent(id)}/${what}`).then(() => loadList());
+    };
+
+    window.addEventListener('markedNotificationAsRead', (event) => notificationWrite(event.detail && event.detail.id, 'read'));
+    window.addEventListener('markedNotificationAsUnread', (event) => notificationWrite(event.detail && event.detail.id, 'unread'));
+
+    document.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target) {
+            return;
+        }
+        const bulk = target.closest('[data-sc-notifications]');
+        if (bulk) {
+            const what = bulk.dataset.scNotifications === 'clear' ? 'clear' : 'read-all';
+            post(`${base}/notifications/${what}`).then(() => loadList(LIST_URL));
+            return;
+        }
+        const page = target.closest('[data-sc-notifications-page]');
+        if (page) {
+            loadList(page.dataset.scNotificationsPage);
+        }
+    });
+
+    window.addEventListener('open-modal', (event) => {
+        if (event.detail && event.detail.id === MODAL_ID) {
+            loadList(LIST_URL).finally(pollList);
+        }
+    });
+
+    // A head start: the list is fetched as soon as the pointer reaches the bell.
+    document.addEventListener('pointerover', (event) => {
+        if (event.target instanceof Element && event.target.closest('.phv2-notifications, .fi-sidebar-database-notifications-btn')) {
+            const modal = document.getElementById(MODAL_ID);
+            if (modal && modal.hasAttribute('data-sc-loading')) {
+                loadList(LIST_URL);
+            }
+        }
+    });
+
+    // ---------------------------------------------------------------- sidebar pill
+
+    // One background slides between the sidebar rows, like Altare's topbar: it follows the row
+    // under the pointer and glides back to the active row when the pointer leaves the nav.
+    const initSidebarPill = () => {
+        const nav = document.querySelector('.fi-sidebar-nav');
+        const indicator = nav?.querySelector('.fi-sidebar-indicator');
+        if (!nav || !indicator) {
+            return;
+        }
+
+        const rowSelector = '.fi-sidebar-item-btn, .fi-sidebar-group-btn';
+        let hovered = null;
+
+        // The active row can be inside a group the person folded away; the pill then sits on the
+        // group's own row, which is the closest thing still on screen.
+        const activeRow = () => {
+            const active = nav.querySelector('.fi-sidebar-item.fi-active > .fi-sidebar-item-btn');
+            if (active && active.getBoundingClientRect().height > 0) {
+                return active;
+            }
+            const header = active?.closest('.fi-sidebar-group')?.querySelector(':scope > .fi-sidebar-group-btn');
+            if (header && header.getBoundingClientRect().height > 0) {
+                return header;
+            }
+            return nav.querySelector('.fi-sidebar-group.fi-active > .fi-sidebar-group-btn');
+        };
+
+        const place = (row) => {
+            if (!row) {
+                indicator.style.opacity = '0';
+                return;
+            }
+            const navBox = nav.getBoundingClientRect();
+            const rowBox = row.getBoundingClientRect();
+            if (rowBox.width === 0 && rowBox.height === 0) {
+                indicator.style.opacity = '0';
+                return;
+            }
+            indicator.style.left = `${rowBox.left - navBox.left + nav.scrollLeft}px`;
+            indicator.style.top = `${rowBox.top - navBox.top + nav.scrollTop}px`;
+            indicator.style.width = `${rowBox.width}px`;
+            indicator.style.height = `${rowBox.height}px`;
+            indicator.style.opacity = '1';
+        };
+
+        const rest = () => {
+            hovered = null;
+            nav.classList.remove('sc-nav-hovering');
+            place(activeRow());
+        };
+
+        nav.addEventListener('mouseover', (event) => {
+            const row = event.target instanceof Element ? event.target.closest(rowSelector) : null;
+            if (!row || row === hovered || !nav.contains(row)) {
+                return;
+            }
+            hovered = row;
+            nav.classList.add('sc-nav-hovering');
+            place(row);
+        });
+
+        nav.addEventListener('mouseleave', rest);
+        window.addEventListener('resize', () => place(hovered || activeRow()));
+
+        // The mobile drawer and a folding group both resize the nav; follow whichever row the
+        // pill belongs to once the size is measurable.
+        new ResizeObserver(() => place(hovered || activeRow())).observe(nav);
+
+        // Filament's groups fold with a height animation; follow the row once it settles.
+        const settle = () => window.setTimeout(() => place(hovered || activeRow()), 250);
+        nav.addEventListener('toggle', settle, true);
+        nav.addEventListener('click', (event) => {
+            if (event.target instanceof Element && event.target.closest('.fi-sidebar-group-btn, .fi-sidebar-more-summary')) {
+                settle();
+            }
+        });
+
+        requestAnimationFrame(rest);
+    };
+
+    // ---------------------------------------------------------------- start
+
+    const start = () => {
+        initSidebarPill();
+        scan(document.body);
+        document.querySelectorAll('form[method="post" i]').forEach(ensureToken);
+
+        // A switch that saves on its own (auto-renew): the Alpine toggle updates the hidden
+        // input on click, then the form posts.
+        document.querySelectorAll('form[data-autosubmit]').forEach((form) => {
+            form.addEventListener('click', (event) => {
+                if (event.target.closest('[role="switch"]')) {
+                    window.setTimeout(() => form.requestSubmit(), 0);
+                }
+            });
+            form.addEventListener('change', (event) => {
+                if (event.target.matches('.theme-switch input')) {
+                    form.requestSubmit();
+                }
+            });
+        });
+
+        const query = new URLSearchParams(window.location.search);
+        const fromUrl = query.get('modal');
+        const id = fromUrl || (script && script.dataset.openModal) || null;
+        if (fromUrl) {
+            query.delete('modal');
+            const rest = query.toString();
+            window.history.replaceState(window.history.state, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+        }
+        if (id) {
+            whenAlpine(() => window.setTimeout(() => openModal(id), 0));
+        }
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start, { once: true });
+    } else {
+        start();
+    }
+
+    window.sc = { openModal, closeModal, toast, copy: copyText, poll: scan, loadNotifications: loadList };
+})();

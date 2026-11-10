@@ -1,6 +1,6 @@
 ﻿namespace CoffeeNChill.ApiGateway.Models
 {
-    // This class describes the information needed to log in.
+    // This class will describe the information needed to log in.
     public class LoginDto
     {
         // The user's email address.

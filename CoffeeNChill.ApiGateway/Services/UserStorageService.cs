@@ -4,12 +4,12 @@ using CoffeeNChill.ApiGateway.Models;
 
 namespace CoffeeNChill.ApiGateway.Services
 {
-    // This service connects to Azure Table Storage and manages user profiles.
+    // This service will connect to Azure Table Storage and manages user profiles.
     public class UserStorageService
     {
         private readonly TableClient _tableClient;
 
-        // The connection string is read from the application configuration.
+        // This connection string is read from the application configuration.
         public UserStorageService(IConfiguration configuration)
         {
             string connectionString =
@@ -17,16 +17,16 @@ namespace CoffeeNChill.ApiGateway.Services
                 ?? throw new InvalidOperationException(
                     "Azure Storage connection string is missing.");
 
-            // Connect to the CoffeeNChillUsers table.
+            // This connects to the CoffeeNChillUsers table.
             _tableClient = new TableClient(
                 connectionString,
                 "CoffeeNChillUsers");
 
-            // Create the table if it does not already exist.
+            // This create the table if it does not already exist.
             _tableClient.CreateIfNotExists();
         }
 
-        // Find a user using their email address.
+        // This finds a user using their email address.
         public async Task<User?> GetUserByEmailAsync(string email)
         {
             string emailKey = email.Trim().ToLowerInvariant();
@@ -42,12 +42,12 @@ namespace CoffeeNChill.ApiGateway.Services
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
-                // Return null if the user does not exist.
+                // This will return null if the user does not exist.
                 return null;
             }
         }
 
-        // Save a newly registered user.
+        // This saves a newly registered user.
         public async Task<bool> CreateUserAsync(User user)
         {
             try

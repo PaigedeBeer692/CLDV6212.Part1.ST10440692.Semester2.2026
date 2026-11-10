@@ -6,21 +6,21 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace CoffeeNChill.ApiGateway.Controllers
 {
-    // This controller handles menu requests sent to the API Gateway.
+    // This controller will handle menu requests sent to the API Gateway.
     [ApiController]
     [Route("api/[controller]")]
     public class MenuController : ControllerBase
     {
         private readonly HttpClient _httpClient;
 
-        // The HttpClient allows the Gateway to communicate with Azure Functions.
+        // The HttpClient will then allow the Gateway to communicate with Azure Functions.
         public MenuController(IHttpClientFactory httpClientFactory)
         {
             _httpClient = httpClientFactory.CreateClient();
         }
 
         // GET: api/Menu
-        // Retrieves all menu items.
+        // This will retrieve all menu items.
         [HttpGet]
         public async Task<IActionResult> GetAllMenuItems()
         {
@@ -39,7 +39,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
         }
 
         // GET: api/Menu/category/Coffee
-        // Retrieves menu items from a selected category.
+        // This will retrieve menu items from a selected category.
         [HttpGet("category/{category}")]
         public async Task<IActionResult> GetMenuItemsByCategory(string category)
         {
@@ -58,7 +58,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
         }
 
         // POST: api/Menu
-        // Adds a new menu item.
+        // This will add a new menu item.
         [Authorize(Roles = "Staff,Admin")]
         [HttpPost]
         public async Task<IActionResult> CreateMenuItem(
@@ -87,7 +87,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
         }
 
         // PUT: api/Menu/Coffee/COF001
-        // Updates an existing menu item.
+        // This will update an existing menu item.
         [Authorize(Roles = "Staff,Admin")]
         [HttpPut("{category}/{id}")]
         public async Task<IActionResult> UpdateMenuItem(
@@ -118,7 +118,7 @@ namespace CoffeeNChill.ApiGateway.Controllers
         }
 
         // DELETE: api/Menu/Coffee/COF001
-        // Deletes a menu item.
+        // This will delete a menu item.
         [Authorize(Roles = "Staff,Admin")]
         [HttpDelete("{category}/{id}")]
         public async Task<IActionResult> DeleteMenuItem(

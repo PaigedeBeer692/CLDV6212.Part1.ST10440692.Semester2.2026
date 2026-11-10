@@ -15,11 +15,11 @@ namespace CoffeeNChill.ApiGateway
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Register application services
+            // This will register application services
             builder.Services.AddControllers();
             builder.Services.AddHttpClient();
 
-            // Register user storage, token and password services
+            // This will register user storage, token and password services
             builder.Services.AddSingleton<UserStorageService>();
             builder.Services.AddSingleton<TokenService>();
 
@@ -27,7 +27,7 @@ namespace CoffeeNChill.ApiGateway
                 IPasswordHasher<User>,
                 PasswordHasher<User>>();
 
-            // Read JWT settings from configuration
+            // This will read JWT settings from configuration
             string jwtKey = builder.Configuration["Jwt:Key"]
                 ?? throw new InvalidOperationException(
                     "JWT key is missing. Please configure User Secrets.");
@@ -40,14 +40,14 @@ namespace CoffeeNChill.ApiGateway
                 ?? throw new InvalidOperationException(
                     "JWT audience is missing.");
 
-            // Check that the JWT key is long enough
+            // This will check that the JWT key is long enough
             if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
             {
                 throw new InvalidOperationException(
                     "JWT key must be at least 32 bytes long.");
             }
 
-            // Configure JWT authentication
+            // This will configure JWT authentication
             builder.Services.AddAuthentication(
                 JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
@@ -71,7 +71,7 @@ namespace CoffeeNChill.ApiGateway
                         };
                 });
 
-            // Configure Swagger
+            // This will configure Swagger
             builder.Services.AddEndpointsApiExplorer();
 
             builder.Services.AddSwaggerGen(options =>
@@ -114,7 +114,7 @@ namespace CoffeeNChill.ApiGateway
 
             var app = builder.Build();
 
-            // Enable Swagger in development
+            // This will enable Swagger in development
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -124,11 +124,11 @@ namespace CoffeeNChill.ApiGateway
             // HTTPS redirection disabled for local testing
             // app.UseHttpsRedirection();
 
-            // Enable authentication and authorization
+            // This will enable authentication and authorization
             app.UseAuthentication();
             app.UseAuthorization();
 
-            // Map controller endpoints
+            // This will then map controller endpoints
             app.MapControllers();
 
             app.Run();

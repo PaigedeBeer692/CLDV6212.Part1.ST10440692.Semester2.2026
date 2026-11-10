@@ -1,6 +1,6 @@
 ﻿namespace CoffeeNChill.ApiGateway.Models
 {
-    // This class describes the information stored for each menu item.
+    // This class will describe the information stored for each menu item.
     public class MenuItem
     {
         // The category the menu item belongs to.
@@ -18,7 +18,7 @@
         // The price of the menu item.
         public double Price { get; set; }
 
-        // Shows whether the menu item is available.
+        // This will show whether the menu item is available.
         public bool IsAvailable { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 ﻿namespace CoffeeNChill.ApiGateway.Models
 {
-    // This class describes the information needed to register.
+    // This class will describe the information needed to register.
     public class RegisterDto
     {
         // The user's full name.
