@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="CoffeeNChill.ApiGateway/CoffeeNChill.ApiGateway.csproj" Id="d2e4f066-02c5-4835-b192-31e733458b48" />
   <Project Path="CoffeeNChill.Functions/CoffeeNChill.Functions.csproj" />
 </Solution>
